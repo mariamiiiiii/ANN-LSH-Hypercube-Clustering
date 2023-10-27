@@ -1,0 +1,25 @@
+Query: 0
+Nearest neighbor-1: 1800
+distanceLSH: 1
+distanceTrue: 1
+tLSH: 0.000546
+tTrue: 0.625391
+R-near neighbors:
+1800
+5198
+6313
+9738
+13459
+17268
+22461
+26077
+26390
+27325
+34719
+35342
+36416
+37284
+47813
+51279
+56593
+
