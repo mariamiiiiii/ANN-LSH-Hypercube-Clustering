@@ -27,6 +27,9 @@ using namespace std;
 /* Window (usually [2, 6]) */
 #define W 6
 
+/* Metric (2 for Euclidean) */
+#define Metric 2
+
 
 /* Returns the minimum distance between centroids*/
 double min_dist(vector<Cluster*> &clusters) {
@@ -34,7 +37,7 @@ double min_dist(vector<Cluster*> &clusters) {
     double result = 1.0/0.0;
     for(unsigned int i = 0; i < clusters.size(); i++) {
         for(unsigned int j = i + 1; j < clusters.size(); j++) {
-            double distance = clusters[i]->getCentroid()->distance(clusters[j]->getCentroid(), 2);
+            double distance = clusters[i]->getCentroid()->distance(clusters[j]->getCentroid(), Metric);
             if(distance < result)
                 result = distance;
         }
@@ -152,76 +155,87 @@ int main(int argc, char *argv[]) {
         default_random_engine generator;
         uniform_int_distribution<int> uniform_distribution(1, input_images.size());
 
-        // k-Means++ initialization:
-        // Choose a centroid uniformly at random (indexing ranges from 1 to n)
+        /*k-Means++ initialization*/
         unordered_set<int> centroids;
+        /*Random initialization for the first centroid*/
         centroids.insert(uniform_distribution(generator));
 
         for (int t = 1; t < K; t++) {
-            // For all non-centroids i, let D(i) = min distance to some centroid, among t chosen centroids and calculate P(r) = sum{D(i), 0 <= i <= r}
+            /*For all non-centroids i, let Di = min distance to some centroid*/
             double *P = new double[input_images.size() - t + 1];
             int *non_cendroid_index = new int[input_images.size() - t + 1];
             P[0] = 0;
-            // Calculate max{D(i)} for all non-centroids i
+
+            /*Calculate maxDi for all non-centroids i*/
             unsigned long long maxDistance = 0;
+
+            /* For every image in input_images */
             for (unsigned int i = 1,j = 0; j < input_images.size(); j++) {
-                // Check if jth point is not a centroid and if so, keep it's index , calculate D(i) and use it to calculate P(i) using prefix sum technique. Otherwise, continue to next point.
-                if (centroids.find(j+1) == centroids.end()) {
-                    // j is not a centroid
-                    // Compute D(i)
-                    double Di = 1.0/0.0;
+                /*If jth point is not a centroid, keep it's index, calculate Di and use it to calculate P. If it is, continue to next point*/
+                if (centroids.find(j + 1) == centroids.end()) {
+                    /*j is not a centroid, compute Di*/
+                    double Di = 1.0 / 0.0;
+
                     for (auto c : centroids) {
-                        double distance = input_images[c-1]->distance(input_images[i-1],2);
+                        double distance = input_images[c-1]->distance(input_images[i - 1], Metric);
                         if (distance < Di) {
                             Di = distance;
                         }
                     }
+
                     i++;
+
                     if (Di >= maxDistance) {
                         maxDistance = Di;
                     }
                 }
             }
-            // i is 1-starting index for all non-centriods and j is 0-starting index for all points
+
+            /*i is for all non-centriods and starts with 1 and j is for all points and starts with 0*/
             for (unsigned int i = 1, j = 0; j < input_images.size(); j++) {
-                // Check if jth point is not a centroid and if so, keep it's index , calculate D(i) and use it to calculate P(i) using prefix sum technique. Otherwise, continue to next point.
+                /*If jth point is not a centroid, keep it's index, calculate Di and use it to calculate P. If it is, continue to next point*/
                 if (centroids.find(j+1) == centroids.end()) {
-                    // j is not a centroid
-                    // Compute D(i)
-                    double Di = 1.0/0.0;
+                    /*j is not a centroid, compute Di*/
+                    double Di = 1.0 / 0.0;
                     for (auto c : centroids) {
-                        double distance = input_images[c-1]->distance(input_images[i-1],2);
+                        double distance = input_images[ c- 1]->distance(input_images[i - 1], Metric);
                         if (distance < Di) {
                             Di = distance;
                         }
                     }
+
                     Di = Di / maxDistance;
-                    P[i] = P[i-1] + (Di * Di);
-                    non_cendroid_index[i] = j+1;
+
+                    P[i] = P[i - 1] + (Di * Di);
+
+                    non_cendroid_index[i] = j + 1;
+
                     i++;
                 }
             }
             
-            // Choose new centroid: r chosen with probability proportional to D(r)^2
+            /*Choose new centroid: r chosen with probability proportional to D(r)^2*/
             uniform_real_distribution<float> floatDistribution(0, P[input_images.size() - t]);
 
-            // Pick a uniformly distributed float x ∈ [0,P(n−t)] and return r ∈ {1,2,...,n−t} : P(r−1) < x ≤ P(r), where P(0) = 0.
+            /* Pick a uniformly distributed float x */
             float x = floatDistribution(generator);
             int left = 1, right = input_images.size() - t,r = 0;
-            // Find r using binary search to P
+            
             while (left <= right) {
-                r = (left+right)/2;
-                if (P[r-1] < x && x <= P[r]) { // P[r-1] < x <= P[r]
+                r = (left + right) / Metric;
+                if (P[r - 1] < x && x <= P[r]) { 
                     break;
                 }
-                else if (x <= P[r-1]) {  // x <= P[r-1] <=  P[r]
+                else if (x <= P[r-1]) { 
                     right = r - 1;
                 }
-                else {  // P[r-1] <= P[r] < x
+                else { 
                     left = r + 1;
                 }
             }
-            // Add chosen centroid r to centroids set
+            
+            
+            /*Add chosen centroid r to centroids set*/
             centroids.insert(non_cendroid_index[r]);
 
             delete[] non_cendroid_index;
@@ -245,7 +259,6 @@ int main(int argc, char *argv[]) {
         
         unordered_map<int,Image*> pointsMap;
 
-        
         if (method == "LSH" || method == "Hypercube") {
             /* Initialize LSH interface */
             if (method == "LSH") {
@@ -255,165 +268,190 @@ int main(int argc, char *argv[]) {
             else {
                 hypercube = new Hypercube(input_dataset, kHypercube, W);
             }
-            // Create an unordered map with all the points to help in the reverse assignment step
+            /*Create an unordered map with all the points for the reverse assignment step*/
             for (unsigned int i = 0; i < input_images.size(); i++) {
                 pointsMap[input_images[i]->getImageId()] = input_images[i];
             }
         }
 
 
-
-
-
-        // Clustering time!!!
+        /* Execute Clustering */ 
         clock_t begin_clustering_time = clock();
         do {
             for (unsigned int i = 0; i < clusters.size(); i++) {
                 clusters[i]->clear();
             }
+
             assignments = 0;
-            // Assignment step
+            
+            /*Classic method*/
             if (method == "Classic") {
                     
-                // Lloyd's algorithn
+                /*Lloyd's algorithn*/
                 for (unsigned int i = 0; i < input_images.size(); i++) {
-                    // Find closest cluster for the current(ith) image
-                    double minDistance = 1.0/0.0;
+                    /*Find closest cluster for the current(ith) image*/
+                    double minDistance = 1.0 / 0.0;
                     Cluster *minCluster = NULL;
+
                     for (unsigned j = 0; j < clusters.size(); j++) {
-                        double distance = input_images[i]->distance(clusters[j]->getCentroid(),2);
+                        double distance = input_images[i]->distance(clusters[j]->getCentroid(), Metric);
                         if (distance < minDistance) {
                             minDistance = distance;
                             minCluster = clusters[j];
                         }
                     }
-                    // Insert the ith image to it's closest cluster
+                    
+                    /*Insert the ith image to it's closest cluster*/
                     minCluster->addPoint(input_images[i]);
                     if (clusterHistory.find(input_images[i]->getImageId()) == clusterHistory.end() || clusterHistory[input_images[i]->getImageId()]->getId() != minCluster->getId()) {
                         assignments++;
                     }
+
                     clusterHistory[input_images[i]->getImageId()] = minCluster;
                 }
 
-            } else if (method == "LSH") {
-                // LSH Reverse Assignment
+            } 
+            /*LSH method*/
+            else if (method == "LSH") {
                 unordered_map<int,Image*> tmpPointsMap = pointsMap;
                 unordered_map<int,Cluster*> bestCluster;
-                double R = ceil(min_dist(clusters)/2.0);
+                double R = ceil(min_dist(clusters) / 2.0);
                 unsigned int curPoints = 0,prevPoints;
                 do {
                     prevPoints = curPoints;
                     curPoints = 0;
-                    // Range search on all cluster centroids and find the best cluster for all range-searched points
+                    
+                    /*Range search on all cluster centroids and find the best cluster for all in-range points*/
                     for (unsigned int i = 0; i < clusters.size(); i++) {
                         vector<Image*> pointsInRange = lsh->rangeSearch(clusters[i]->getCentroid(),R);
                         curPoints += pointsInRange.size();
+
                         for (unsigned int j = 0; j < pointsInRange.size(); j++) {
-                            // Check if current in-range point was not yet assigned to a cluster
+
+                            /*Check if current in-range point was assigned to a cluster yet or not*/
                             if (tmpPointsMap.find(pointsInRange[j]->getImageId()) != tmpPointsMap.end()) {
-                                // If so, assign it to the corresponding cluster
+                                
+                                /*If it isn't, assign it to the corresponding cluster*/
                                 bestCluster[pointsInRange[j]->getImageId()] = clusters[i];
                                 tmpPointsMap.erase(pointsInRange[j]->getImageId());
-                            } else if (pointsInRange[j]->distance(clusters[i]->getCentroid(),2) < pointsInRange[j]->distance(bestCluster[pointsInRange[j]->getImageId()]->getCentroid(),2)) {
+                            } 
+                            else if (pointsInRange[j]->distance(clusters[i]->getCentroid(), Metric) < pointsInRange[j]->distance(bestCluster[pointsInRange[j]->getImageId()]->getCentroid(), Metric)) {
                                 bestCluster[pointsInRange[j]->getImageId()] = clusters[i];
                             }
                         }
                     }
-                    R *= 2.0;
+
+                    R = R * 2.0;
+
                 } while (curPoints - prevPoints > 0);
-                // Assign all range-searched points to their best cluster
+                
+                
+                /*Assign all range-searched points to their best cluster*/
                 for (auto it : bestCluster) {
                     it.second->addPoint(pointsMap[it.first]);
+
                     if (clusterHistory.find(it.first) == clusterHistory.end() || clusterHistory[it.first]->getId() != it.second->getId()) {
                         assignments++;
                     }
+
                     clusterHistory[it.first] = it.second;
                 }
-                // Assign rest points using Lloyd's method
+                
+                
                 for(auto it : tmpPointsMap) {
-                    double distanceToClosestCentroid = 1.0/0.0;
+                    double distanceToClosestCentroid = 1.0 / 0.0;
                     Cluster *closestCluster = NULL;
 
                     for (unsigned int i = 0; i < clusters.size(); i++) {
-                        double distance = it.second->distance(clusters[i]->getCentroid(),2);
+                        double distance = it.second->distance(clusters[i]->getCentroid(), Metric);
 
                         if (distance < distanceToClosestCentroid) {
                             distanceToClosestCentroid = distance;
                             closestCluster = clusters[i];
                         }
                     }
-                    // Insert the current image to it's closest cluster
+                    
+                    /*Insert the current image to it's closest cluster*/
                     closestCluster->addPoint(it.second);
+
                     if (clusterHistory.find(it.first) == clusterHistory.end() || clusterHistory[it.first]->getId() != closestCluster->getId()) {
                         assignments++;
                     }
 
                     clusterHistory[it.first] = closestCluster;
                 }
-            } else if (method == "Hypercube") {
+            } 
+            /*Hypercube method*/
+            else if (method == "Hypercube") {
                 // Hypercube Reverse Assignment
                 unordered_map<int,Image*> tmpPointsMap = pointsMap;
                 unordered_map<int,Cluster*> bestCluster;
-                double R = ceil(min_dist(clusters)/2.0);
+                double R = ceil(min_dist(clusters) / 2.0);
                 unsigned int curPoints = 0,prevPoints;
+
                 do {
                     prevPoints = curPoints;
                     curPoints = 0;
-                    // Range search on all cluster centroids and assign the returned in-range points
+                    /*Range search on all cluster centroids and assign the returned in-range points*/
                     cout << clusters.size() << endl;
                     for (unsigned int i = 0; i < clusters.size(); i++) {
                         list<Image*> pointsInRange = hypercube->rangeSearch(clusters[i]->getCentroid(), M_cube, probes,R);
                         curPoints = curPoints + pointsInRange.size();
-                        cout << i << endl;
+                        
+
                         for (list<Image*>::iterator it = pointsInRange.begin(); it != pointsInRange.end(); it++) {
-                            // Check if current in-range point was not yet assigned to a cluster
+                            /*Check if current in-range point was assigned to a cluster yet or not*/
                             if (tmpPointsMap.find((*it)->getImageId()) != tmpPointsMap.end()) {
-                                // If so, assign it to the corresponding cluster
+                                
+                                /*Check if current in-range point was assigned to a cluster yet or not*/
                                 bestCluster[(*it)->getImageId()] = clusters[i];
                                 tmpPointsMap.erase((*it)->getImageId());
-                            } else if ((*it)->distance(clusters[i]->getCentroid(),2) < (*it)->distance(bestCluster[(*it)->getImageId()]->getCentroid(),2)) {
+                            } else if ((*it)->distance(clusters[i]->getCentroid(), Metric) < (*it)->distance(bestCluster[(*it)->getImageId()]->getCentroid(), Metric)) {
                                 bestCluster[(*it)->getImageId()] = clusters[i];
                             }
                         }
                     }
 
-                    R *= 2.0;
+                    R = R * 2.0;
                 } while (curPoints - prevPoints > 0);
-                // Assign all range-searched points to their best cluster
+
+                /*Assign all range-searched points to their best cluster*/
                 for (auto it : bestCluster) {
                     it.second->addPoint(pointsMap[it.first]);
+
                     if (clusterHistory.find(it.first) == clusterHistory.end() || clusterHistory[it.first]->getId() != it.second->getId()) {
                         assignments++;
                     }
+
                     clusterHistory[it.first] = it.second;
                 }
-                // Assign rest points using Lloyd's method
+                
+                
                 for(auto it : tmpPointsMap) {
-                    double distanceToClosestCentroid = 1.0/0.0;
+                    double distanceToClosestCentroid = 1.0 / 0.0;
                     Cluster *closestCluster = NULL;
                     
                     for (unsigned int i = 0; i < clusters.size(); i++) {
-                        double distance = it.second->distance(clusters[i]->getCentroid(),2);
+                        double distance = it.second->distance(clusters[i]->getCentroid(), Metric);
+                        
                         if (distance < distanceToClosestCentroid) {
                             distanceToClosestCentroid = distance;
                             closestCluster = clusters[i];
                         }
                     }
-                    // Insert the current image to it's closest cluster
+                    
+                    /*Insert the current image to it's closest cluster*/
                     closestCluster->addPoint(it.second);
+                    
                     if (clusterHistory.find(it.first) == clusterHistory.end() || clusterHistory[it.first]->getId() != closestCluster->getId()) {
                         assignments++;
                     }
+                    
                     clusterHistory[it.first] = closestCluster;
                 }
-
-
-
-
-
             }
 
-            // Update all cluster centroids
+            /*Update all cluster centroids*/
             if (assignments > 0) {
                 for (unsigned int i = 0; i < clusters.size(); i++) {
                     clusters[i]->updateCentroid();
@@ -424,7 +462,7 @@ int main(int argc, char *argv[]) {
         } while (assignments > 100);
         double clustering_time = double(clock() - begin_clustering_time) / CLOCKS_PER_SEC;
         
-        // Print used method
+        /*Print the used method*/
         outputStream << "Algorithm: ";
         if (method == "Classic") {
             outputStream << "Lloyds";
@@ -433,30 +471,33 @@ int main(int argc, char *argv[]) {
         } else if (method == "Hypercube") {
             outputStream << "Range Search Hypercube";
         }
+
         outputStream << endl;
 
-        // Print stats
+        /*Print clustering results*/
         for (unsigned int i = 0; i < clusters.size(); i++) {
             outputStream << "CLUSTER-" << i+1 << " {size: " << clusters[i]->getSize() << ", centroid: [";
+            
             for (int j = 0; j < input_dataset->getImageSize() - 1; j++) {
                 outputStream << (int)clusters[i]->getCentroid()->getPixel(j) << ", ";
             }
+            
             outputStream << (int)clusters[i]->getCentroid()->getPixel(input_dataset->getImageSize()-1) << "]}\n";
         }
 
-        // Print clustering time
+        /*Print clustering time*/
         outputStream << "clustering_time: " << clustering_time << endl;
 
-        // Calculate Silhouette for all images
+        /*Silhouette algorithm*/
         double averageSilhouette = 0.0;
         vector<double> s;
+        
         for (unsigned int i = 0; i < input_images.size(); i++) {
-            // Calculate distance of ith image to all the clusters
             Cluster *neighbourCluster = NULL, *closestCluster = NULL;
             double distanceToClosestCentroid = 1.0/0.0, distanceToSecondClosest = 1.0/0.0;
             
             for (unsigned int j = 0; j < clusters.size(); j++) {
-                double distance = input_images[i]->distance(clusters[j]->getCentroid(), 2);
+                double distance = input_images[i]->distance(clusters[j]->getCentroid(), Metric);
 
                 if (distance < distanceToClosestCentroid) {
                     distanceToSecondClosest = distanceToClosestCentroid;
@@ -465,57 +506,63 @@ int main(int argc, char *argv[]) {
                     neighbourCluster = closestCluster;
                     closestCluster = clusters[j];
                 }
+                /*needed for bi*/
                 else if(distance < distanceToSecondClosest) {
                     distanceToSecondClosest = distance;
                     neighbourCluster = clusters[j];
                 }
             }
-            // Calculate average distance of ith image to images in same cluster
+            
+            /*Calculate average distance of ith image to images in same cluster*/
             double ai = clusterHistory[input_images[i]->getImageId()]->averageDistance(input_images[i]);
-            // Calculate average distance of ith image to images in the next best(neighbor) cluster
+            
+            /*Calculate average distance of ith image to images in the next best(neighbor) cluster*/
             double bi = neighbourCluster->averageDistance(input_images[i]);
-            // Calculate Silhouette for ith image
+            
+            /*Calculate Silhouette score for ith image*/
             double si = (bi - ai)/max(ai, bi);
             s.push_back(si);
             averageSilhouette += si;
         }
-        // Print Silhouettes
+        
         outputStream << "Silhouette: [";
 
-        // Calculate and print average Silhouette for each cluster
+        /*Calculate and print average Silhouette for each cluster*/
         for (unsigned int i = 0; i < clusters.size(); i++) {
             double averageS = 0.0;
             vector<Image*> clusterPoints = clusters[i]->getPoints();
+            
             for (unsigned int j = 0; j < clusterPoints.size(); j++) {
                 averageS += averageS + s[clusterPoints[j]->getImageId()];
             }
+            
             outputStream << averageS/clusterPoints.size() << ",";
         }
         
-        // Print average Silhouette for all points in dataset
+        /*Print average Silhouette for all points in dataset*/
         averageSilhouette = averageSilhouette / input_images.size();
         outputStream << " " << averageSilhouette << "]\n";
 
-        // Optionally (with command line parameter –complete) print image numbers in each cluster
+        /*Print image numbers in each cluster*/
         if (complete) {
             for (unsigned int i = 0; i < clusters.size(); i++) {
                 outputStream << "CLUSTER-" << i+1 << " {[";
+                
                 for (int j = 0; j < input_dataset->getImageSize() - 1; j++) {
                     outputStream << (int)clusters[i]->getCentroid()->getPixel(j) << ", ";
                 }
+                
                 outputStream << (int)clusters[i]->getCentroid()->getPixel(input_dataset->getImageSize()-1) << "]";
                 vector<Image*> clusterImages = clusters[i]->getPoints();
+                
                 for (unsigned int j = 0; j < clusterImages.size(); j++) {
                     outputStream << ", " << clusterImages[j]->getImageId();
                 }
+                
                 outputStream << "}\n";
             }
         }
 
-        // for (unsigned int i = 0; i < clusters.size(); i++) {
-        //     delete clusters[i];
-        // }
-        
         if (method == "LSH") {
             delete lsh;
         }
@@ -523,8 +570,8 @@ int main(int argc, char *argv[]) {
             delete hypercube;
         }
         
-        
         delete input_dataset;
+
 
         /* Ask user to continue or not the program*/
         string user_answer;
@@ -550,6 +597,7 @@ int main(int argc, char *argv[]) {
 
     } 
 
+    /* Close output_file*/
     outputStream.close();
 
     return 0;
